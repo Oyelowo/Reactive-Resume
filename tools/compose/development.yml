@@ -1,11 +1,6 @@
 version: "3.8"
 
-# In this Docker Compose example, we only fire up the services required for local development.
-# This is not advised for production use as it exposes ports to the database insecurely.
-# If you're looking for a production-ready Docker Compose file, check out the `traefik.yml` file.
-
 services:
-  # Database (Postgres)
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -23,14 +18,13 @@ services:
       timeout: 5s
       retries: 5
 
-  # Storage (for image uploads)
   minio:
     image: minio/minio
     restart: unless-stopped
     command: server /data
     ports:
       - ${STORAGE_PORT:-9000}:9000
-      - "9001:9001" # Minio Console (Optional)
+      - "9001:9001"
     volumes:
       - minio_data:/data
     environment:
@@ -39,7 +33,6 @@ services:
       MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-minioadmin}
 
-  # Chrome Browser (for printing and previews)
   chrome:
     image: ghcr.io/browserless/chromium:latest
     restart: unless-stopped
@@ -51,6 +44,39 @@ services:
       TOKEN: ${CHROME_TOKEN:-chrome_token}
       EXIT_ON_HEALTH_FAILURE: true
       PRE_REQUEST_HEALTH_CHECK: true
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - minio
+      - chrome
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      PUBLIC_URL: http://localhost:3000
+      STORAGE_URL: http://localhost:9000/default
+      CHROME_TOKEN: chrome_token
+      CHROME_URL: ws://chrome:3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      ACCESS_TOKEN_SECRET: access_token_secret
+      REFRESH_TOKEN_SECRET: refresh_token_secret
+      MAIL_FROM: noreply@localhost
+      STORAGE_ENDPOINT: minio
+      STORAGE_PORT: 9000
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: default
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_USE_SSL: false
+      STORAGE_SKIP_BUCKET_CHECK: false
+      DISABLE_EMAIL_AUTH: true
+      VITE_DISABLE_SIGNUPS: true
 
 volumes:
   minio_data:
